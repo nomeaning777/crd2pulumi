@@ -7,3 +7,4 @@ python = '3.11.8'
 dotnet = '8.0.414'
 # Corretto version used as Java SE/OpenJDK version no longer offered
 java = 'corretto-11'
+goreleaser = "1.26"
