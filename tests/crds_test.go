@@ -284,6 +284,46 @@ func TestNodeJsObjectMeta(t *testing.T) {
 	execCrd2Pulumi(t, "nodejs", "crds/k8sversion/mock_crd.yaml", validateVersion)
 }
 
+func TestNodeJsHyphenatedPropertyNames(t *testing.T) {
+	validateQuotedPropertyNames := func(t *testing.T, path string, quoted, unquoted string) {
+		filename := filepath.Join(path, "types", "input.ts")
+		t.Logf("validating quoted property names in %s", filename)
+
+		inputs, err := os.ReadFile(filename)
+		if err != nil {
+			t.Fatalf("expected to read generated NodeJS code: %s", err)
+		}
+		content := string(inputs)
+		assert.Contains(t, content, quoted, "expected quoted property name in generated TypeScript")
+		assert.NotContains(t, content, unquoted, "expected unquoted property name to be absent from generated TypeScript")
+	}
+
+	execCrd2Pulumi(t, "nodejs", "crds/regression/hyphenated-symbols/hyphen-test.yml",
+		func(t *testing.T, path string) {
+			validateQuotedPropertyNames(t, path, `"has-a-hyphen"?:`, `has-a-hyphen?:`)
+		})
+}
+
+func TestNodeJsDottedPropertyNames(t *testing.T) {
+	validateQuotedPropertyNames := func(t *testing.T, path string, quoted, unquoted string) {
+		filename := filepath.Join(path, "types", "input.ts")
+		t.Logf("validating quoted property names in %s", filename)
+
+		inputs, err := os.ReadFile(filename)
+		if err != nil {
+			t.Fatalf("expected to read generated NodeJS code: %s", err)
+		}
+		content := string(inputs)
+		assert.Contains(t, content, quoted, "expected quoted property name in generated TypeScript")
+		assert.NotContains(t, content, unquoted, "expected unquoted property name to be absent from generated TypeScript")
+	}
+
+	execCrd2Pulumi(t, "nodejs", "crds/regression/dotted-symbols/dot-test.yml",
+		func(t *testing.T, path string) {
+			validateQuotedPropertyNames(t, path, `"has.a.dot"?:`, `has.a.dot?:`)
+		})
+}
+
 func withDir(t *testing.T, dir string, f func()) {
 	pwd, err := os.Getwd()
 	require.NoError(t, err)

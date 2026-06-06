@@ -17,6 +17,9 @@ package codegen
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/pulumi/pulumi/pkg/v3/codegen/nodejs"
 )
@@ -28,6 +31,44 @@ const nodejsMetaFile = `import * as k8s from "@pulumi/kubernetes";
 export type ObjectMeta = k8s.types.input.meta.v1.ObjectMeta;
 export type ObjectMetaPatch = k8s.types.input.meta.v1.ObjectMetaPatch;
 `
+
+// nodejsPropertyDecl matches interface property declarations in generated TypeScript.
+// The upstream nodejs codegen emits property names unquoted, which is invalid when
+// CRD field names contain characters like '.' or '-' (see gen.WithAllowHyphens).
+var nodejsPropertyDecl = regexp.MustCompile(`^(\s+)(readonly )?([A-Za-z0-9_$.\-]+)(\??):( .*)$`)
+
+func isValidTSIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if r == '_' || r == '$' || unicode.IsLetter(r) {
+			continue
+		}
+		if i > 0 && unicode.IsDigit(r) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func quoteInvalidPropertyNames(code []byte) []byte {
+	lines := bytes.Split(code, []byte("\n"))
+	for i, line := range lines {
+		m := nodejsPropertyDecl.FindSubmatch(line)
+		if m == nil {
+			continue
+		}
+		name := string(m[3])
+		if isValidTSIdentifier(name) {
+			continue
+		}
+		lines[i] = []byte(fmt.Sprintf("%s%s\"%s\"%s:%s",
+			m[1], m[2], name, m[4], m[5]))
+	}
+	return bytes.Join(lines, []byte("\n"))
+}
 
 func GenerateNodeJS(pg *PackageGenerator, cs *CodegenSettings) (map[string]*bytes.Buffer, error) {
 	pkg := pg.SchemaPackageWithObjectMetaType()
@@ -64,6 +105,9 @@ function unusedGetVersion(): string {`, KubernetesProviderVersion)))
 
 	buffers := map[string]*bytes.Buffer{}
 	for name, code := range files {
+		if strings.HasSuffix(name, ".ts") {
+			code = quoteInvalidPropertyNames(code)
+		}
 		buffers[name] = bytes.NewBuffer(code)
 	}
 
